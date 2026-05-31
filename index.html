@@ -1,54 +1,1323 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sprite Sheet Extractor</title>
-    <style>
-        body { font-family: Arial, sans-serif; }
-        #input { margin-bottom: 10px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpriteSlice v4 — Advanced Spritesheet Detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#080c10; --surface:#0e1318; --panel:#131920; --border:#1e2d3d;
+    --accent:#00e5ff; --accent2:#ff5c5c; --green:#39ff88; --yellow:#ffd166;
+    --orange:#ff9f43; --purple:#a29bfe; --text:#c8d8e8; --muted:#4a6070;
+    --mono:'IBM Plex Mono',monospace; --display:'Chakra Petch',sans-serif;
+  }
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;}
+  #app{display:grid;grid-template-columns:260px 1fr 300px;grid-template-rows:48px 1fr;height:100vh;}
+
+  header{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);}
+  .logo{font-family:var(--display);font-size:18px;font-weight:700;color:var(--accent);letter-spacing:2px;}
+  .logo span{color:var(--text);}
+  .badge{font-size:10px;padding:2px 7px;border-radius:2px;background:#001a22;color:var(--accent);border:1px solid var(--accent);letter-spacing:1px;}
+  .stat-strip{margin-left:auto;display:flex;gap:20px;}
+  .stat{font-size:11px;color:var(--muted);}
+  .stat b{color:var(--green);font-weight:500;}
+
+  #controls{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;}
+  #controls::-webkit-scrollbar{width:4px;}
+  #controls::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+  .section{padding:11px 14px;border-bottom:1px solid var(--border);}
+  .section-title{font-family:var(--display);font-size:10px;font-weight:600;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:9px;}
+  label{display:block;color:var(--muted);font-size:11px;margin-bottom:3px;margin-top:7px;}
+  label:first-of-type{margin-top:0;}
+  .val{color:var(--accent);font-weight:500;float:right;}
+
+  input[type=range]{width:100%;appearance:none;height:4px;background:var(--border);border-radius:2px;outline:none;cursor:pointer;}
+  input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);cursor:pointer;}
+
+  .btn{display:block;width:100%;padding:8px 0;font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;border:none;border-radius:3px;cursor:pointer;transition:all .15s;outline:none;}
+  .btn-primary{background:var(--accent);color:#000;}
+  .btn-primary:hover{background:#33ecff;}
+  .btn-primary:disabled{background:var(--border);color:var(--muted);cursor:default;}
+  .btn-orange{background:var(--orange);color:#000;margin-top:5px;}
+  .btn-orange:hover{background:#ffb347;}
+  .btn-orange:disabled{background:var(--border);color:var(--muted);cursor:default;}
+  .btn-danger{background:transparent;color:var(--accent2);border:1px solid var(--border);margin-top:5px;}
+  .btn-danger:hover{border-color:var(--accent2);background:rgba(255,92,92,.06);}
+  .btn-danger:disabled{color:var(--muted);cursor:default;}
+
+  .check-row{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11px;color:var(--text);cursor:pointer;}
+  .check-row input[type=checkbox]{accent-color:var(--accent);cursor:pointer;}
+
+  .mode-tabs{display:flex;gap:4px;margin-bottom:8px;}
+  .mode-tab{flex:1;padding:5px 0;font-family:var(--display);font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;border:1px solid var(--border);background:var(--panel);color:var(--muted);cursor:pointer;border-radius:3px;transition:all .15s;}
+  .mode-tab.active{background:rgba(0,229,255,.12);color:var(--accent);border-color:var(--accent);}
+
+  .mode-panel{display:none;}
+  .mode-panel.active{display:block;}
+
+  .info-box{background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.15);border-radius:3px;padding:7px 9px;font-size:10px;color:var(--muted);line-height:1.5;margin-top:8px;}
+  .info-box b{color:var(--accent);}
+
+  .retry-badge{display:inline-block;background:rgba(255,159,67,0.15);color:var(--orange);border:1px solid rgba(255,159,67,0.4);border-radius:2px;font-size:10px;padding:2px 6px;letter-spacing:.5px;margin-top:5px;width:100%;text-align:center;}
+
+  #canvas-wrap{position:relative;overflow:hidden;background:repeating-conic-gradient(#0d1318 0% 25%,#0a1015 0% 50%) 0 0/20px 20px;cursor:grab;}
+  #canvas-wrap:active{cursor:grabbing;}
+  #canvas-wrap canvas{position:absolute;top:0;left:0;}
+  #overlay-canvas{pointer-events:none;}
+
+  #drop-zone{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:10;background:var(--bg);border:2px dashed var(--border);transition:border-color .2s,background .2s;cursor:pointer;}
+  #drop-zone.drag-over{border-color:var(--accent);background:rgba(0,229,255,.04);}
+  #drop-zone.hidden{display:none;}
+  .drop-icon{font-size:48px;line-height:1;}
+  .drop-title{font-family:var(--display);font-size:22px;font-weight:700;color:var(--text);letter-spacing:1px;}
+  .drop-sub{font-size:12px;color:var(--muted);}
+  .drop-formats{font-size:10px;color:var(--muted);letter-spacing:1px;margin-top:4px;}
+  .file-btn{padding:8px 20px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:var(--display);font-size:12px;font-weight:600;letter-spacing:1px;cursor:pointer;border-radius:3px;transition:all .15s;}
+  .file-btn:hover{background:rgba(0,229,255,.1);}
+  #file-input{display:none;}
+
+  #zoom-bar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;background:rgba(8,12,16,.92);border:1px solid var(--border);border-radius:4px;padding:5px 10px;z-index:5;backdrop-filter:blur(6px);user-select:none;}
+  #zoom-bar button{background:none;border:none;color:var(--accent);font-size:16px;cursor:pointer;line-height:1;padding:0 3px;transition:color .1s;}
+  #zoom-bar button:hover{color:#fff;}
+  #zoom-label{font-size:11px;color:var(--muted);min-width:42px;text-align:center;}
+  .zoom-sep{width:1px;height:14px;background:var(--border);margin:0 2px;}
+
+  #nav-hint{position:absolute;top:10px;right:10px;font-size:10px;color:var(--muted);background:rgba(8,12,16,.7);padding:4px 8px;border-radius:3px;border:1px solid var(--border);pointer-events:none;opacity:1;transition:opacity 1s;}
+  #nav-hint.fade{opacity:0;}
+
+  #results{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+  #results-header{padding:12px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+  .results-title{font-family:var(--display);font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);}
+  .results-count{font-size:20px;font-family:var(--display);font-weight:700;color:var(--green);line-height:1;}
+
+  #search-box{width:calc(100% - 32px);margin:9px 16px;padding:6px 10px;background:var(--panel);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;border-radius:3px;outline:none;}
+  #search-box:focus{border-color:var(--accent);}
+
+  #sprite-list{flex:1;min-height:0;overflow-y:auto;padding:0 8px 8px;}
+  #sprite-list::-webkit-scrollbar{width:5px;}
+  #sprite-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+  .sprite-item{display:grid;grid-template-columns:28px 1fr auto;gap:0 8px;align-items:center;padding:5px 8px;border-radius:4px;cursor:pointer;border:1px solid transparent;margin-bottom:2px;transition:background .1s;}
+  .sprite-item:hover{background:rgba(0,229,255,.05);border-color:var(--border);}
+  .sprite-item.active{background:rgba(0,229,255,.1);border-color:var(--accent);}
+  .sprite-num{font-family:var(--display);font-size:10px;font-weight:700;color:var(--muted);text-align:right;}
+  .sprite-data{font-size:10px;color:var(--text);}
+  .sprite-data .coords{color:var(--muted);}
+  .sprite-data .coords b{color:var(--accent);font-weight:500;}
+  .sprite-del{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:2px 4px;border-radius:2px;line-height:1;transition:color .1s;}
+  .sprite-del:hover{color:var(--accent2);}
+
+  #export-bar{padding:8px 10px;border-top:1px solid var(--border);display:flex;gap:5px;flex-wrap:wrap;flex-shrink:0;}
+  #export-bar button{flex:1;min-width:55px;padding:6px 0;font-family:var(--display);font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .15s;border:1px solid var(--border);background:var(--panel);color:var(--text);}
+  #export-bar button:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.06);}
+  #export-bar button:disabled{opacity:.3;cursor:default;}
+  .exp-sheet-btn{background:rgba(57,255,136,.08)!important;color:var(--green)!important;border-color:rgba(57,255,136,.3)!important;}
+  .exp-sheet-btn:hover{background:rgba(57,255,136,.15)!important;border-color:var(--green)!important;}
+
+  .toggle-switch{position:relative;display:inline-block;width:32px;height:17px;flex-shrink:0;}
+  .toggle-switch input{opacity:0;width:0;height:0;}
+  .toggle-knob{position:absolute;inset:0;background:var(--border);border-radius:17px;cursor:pointer;transition:.2s;}
+  .toggle-knob::before{content:'';position:absolute;width:11px;height:11px;left:3px;bottom:3px;background:var(--muted);border-radius:50%;transition:.2s;}
+  .toggle-switch input:checked+.toggle-knob{background:rgba(57,255,136,0.3);}
+  .toggle-switch input:checked+.toggle-knob::before{transform:translateX(15px);background:var(--green);}
+
+  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--green);color:#000;padding:8px 18px;font-family:var(--display);font-size:12px;font-weight:600;letter-spacing:1px;border-radius:4px;opacity:0;pointer-events:none;transition:opacity .3s;z-index:100;white-space:nowrap;}
+  #toast.show{opacity:1;}
+  #progress-bar{position:absolute;bottom:0;left:0;height:2px;background:var(--accent);width:0%;transition:width .1s;z-index:20;}
+
+  .empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-size:12px;}
+  .empty-state div{font-size:28px;margin-bottom:8px;}
+
+  #retry-indicator{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(8,12,16,0.92);border:1px solid var(--orange);border-radius:6px;padding:16px 24px;text-align:center;z-index:30;backdrop-filter:blur(8px);}
+  #retry-indicator.show{display:block;}
+  .retry-title{font-family:var(--display);font-size:14px;color:var(--orange);letter-spacing:1px;margin-bottom:6px;}
+  .retry-sub{font-size:11px;color:var(--muted);}
+
+  /* Seam overlay lines */
+  .seam-h-line, .seam-v-line { position:absolute; pointer-events:none; z-index:4; }
+</style>
 </head>
 <body>
-    <h1>Sprite Sheet Extractor</h1>
-    <input type="file" id="input" accept="image/*">
-    <canvas id="canvas" style="display:none;"></canvas>
-    <div id="sprites"></div>
-    <script>
-        document.getElementById('input').addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = new Image();
-                img.src = e.target.result;
-                img.onload = function() {
-                    const canvas = document.getElementById('canvas');
-                    const ctx = canvas.getContext('2d');
-                    const spriteWidth = 64; // Set the width of each sprite
-                    const spriteHeight = 64; // Set the height of each sprite
-                    const columns = Math.floor(img.width / spriteWidth);
-                    const rows = Math.floor(img.height / spriteHeight);
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    ctx.drawImage(img, 0, 0);
+<div id="app">
 
-                    const spritesDiv = document.getElementById('sprites');
-                    spritesDiv.innerHTML = '';
+  <header>
+    <div class="logo">SPRITE<span>SLICE</span></div>
+    <div class="badge">v4.0</div>
+    <div class="stat-strip">
+      <div class="stat">SPRITES: <b id="stat-count">—</b></div>
+      <div class="stat">IMAGE: <b id="stat-size">—</b></div>
+      <div class="stat">TIME: <b id="stat-time">—</b></div>
+    </div>
+  </header>
 
-                    for (let row = 0; row < rows; row++) {
-                        for (let col = 0; col < columns; col++) {
-                            const spriteCanvas = document.createElement('canvas');
-                            spriteCanvas.width = spriteWidth;
-                            spriteCanvas.height = spriteHeight;
-                            const spriteCtx = spriteCanvas.getContext('2d');
-                            spriteCtx.drawImage(canvas, col * spriteWidth, row * spriteHeight, spriteWidth, spriteHeight, 0, 0, spriteWidth, spriteHeight);
-                            spritesDiv.appendChild(spriteCanvas);
-                        }
-                    }
-                };
-            };
-            reader.readAsDataURL(file);
-        });
-    </script>
+  <div id="controls">
+
+    <!-- Detection Mode -->
+    <div class="section">
+      <div class="section-title">Detection Mode</div>
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tab-auto" onclick="setMode('auto')">AUTO</button>
+        <button class="mode-tab" id="tab-grid" onclick="setMode('grid')">GRID</button>
+        <button class="mode-tab" id="tab-seam" onclick="setMode('seam')">SEAM</button>
+      </div>
+
+      <!-- AUTO mode -->
+      <div class="mode-panel active" id="panel-auto">
+        <div class="info-box">Combines BFS flood-fill, seam analysis, and grid detection. <b>Best for most sheets.</b></div>
+      </div>
+
+      <!-- GRID mode -->
+      <div class="mode-panel" id="panel-grid">
+        <div class="info-box">Force a <b>fixed grid</b> — set cell size manually. Perfect for perfectly uniform spritesheets.</div>
+        <label>Cell Width (px) <span class="val" id="gw-val">48</span></label>
+        <input type="range" id="grid-w" min="4" max="256" value="48">
+        <label>Cell Height (px) <span class="val" id="gh-val">48</span></label>
+        <input type="range" id="grid-h" min="4" max="256" value="48">
+        <label>Offset X (px) <span class="val" id="ox-val">0</span></label>
+        <input type="range" id="offset-x" min="0" max="128" value="0">
+        <label>Offset Y (px) <span class="val" id="oy-val">0</span></label>
+        <input type="range" id="offset-y" min="0" max="128" value="0">
+        <label>Spacing (px) <span class="val" id="sp-val">0</span></label>
+        <input type="range" id="spacing" min="0" max="32" value="0">
+        <label class="check-row"><input type="checkbox" id="grid-skip-empty" checked> Skip empty cells</label>
+      </div>
+
+      <!-- SEAM mode -->
+      <div class="mode-panel" id="panel-seam">
+        <div class="info-box">Finds <b>cuts/seams</b> between tightly packed sprites using projection analysis. Best for dense grids with no spacing.</div>
+        <label>BG Threshold <span class="val" id="st-val">20</span></label>
+        <input type="range" id="seam-thresh" min="1" max="100" value="20">
+        <label>Min Seam Width (px) <span class="val" id="sw-val">1</span></label>
+        <input type="range" id="seam-min-w" min="1" max="8" value="1">
+        <label class="check-row"><input type="checkbox" id="seam-show" checked> Show seam lines</label>
+      </div>
+    </div>
+
+    <!-- Background -->
+    <div class="section">
+      <div class="section-title">Background</div>
+      <label>Color Tolerance <span class="val" id="tol-val">28</span></label>
+      <input type="range" id="tolerance" min="1" max="128" value="28">
+      <label class="check-row"><input type="checkbox" id="use-alpha" checked> Use Alpha Channel (PNG)</label>
+      <label class="check-row"><input type="checkbox" id="edge-sample" checked> Sample Edge Colors</label>
+    </div>
+
+    <!-- Filtering -->
+    <div class="section">
+      <div class="section-title">Filtering</div>
+      <label>Min Width (px) <span class="val" id="mw-val">6</span></label>
+      <input type="range" id="min-w" min="1" max="96" value="6">
+      <label>Min Height (px) <span class="val" id="mh-val">6</span></label>
+      <input type="range" id="min-h" min="1" max="96" value="6">
+      <label>Padding (px) <span class="val" id="pad-val">1</span></label>
+      <input type="range" id="padding" min="0" max="16" value="1">
+      <label>Max Aspect Ratio <span class="val" id="ratio-val">12</span></label>
+      <input type="range" id="max-ratio" min="1" max="30" value="12">
+    </div>
+
+    <!-- Connectivity -->
+    <div class="section">
+      <div class="section-title">Connectivity</div>
+      <label class="check-row"><input type="checkbox" id="merge-near" checked> Merge Close Rects</label>
+      <label>Merge Gap (px) <span class="val" id="gap-val">3</span></label>
+      <input type="range" id="merge-gap" min="0" max="48" value="3">
+      <label class="check-row"><input type="checkbox" id="filter-contained" checked> Remove Contained Sprites</label>
+      <label class="check-row"><input type="checkbox" id="eight-conn"> 8-Connected</label>
+    </div>
+
+    <!-- Display -->
+    <div class="section">
+      <div class="section-title">Display</div>
+      <label class="check-row"><input type="checkbox" id="show-index" checked> Show Sprite Numbers</label>
+      <label class="check-row"><input type="checkbox" id="show-bg"> Show BG Mask</label>
+      <label class="check-row"><input type="checkbox" id="show-seams"> Show Seam Lines</label>
+    </div>
+
+    <!-- Actions -->
+    <div class="section">
+      <button class="btn btn-primary" id="detect-btn" disabled>▶  DETECT SPRITES</button>
+      <button class="btn btn-orange"  id="retry-btn"  disabled>↺  RETRY (Smarter)</button>
+      <span class="retry-badge" id="retry-info" style="display:none">Attempt <span id="retry-count">1</span> — adjusting params…</span>
+      <button class="btn btn-danger"  id="reset-btn"  disabled>✕  RESET</button>
+    </div>
+
+  </div>
+
+  <!-- CANVAS AREA -->
+  <div id="canvas-wrap">
+    <canvas id="img-canvas"></canvas>
+    <canvas id="overlay-canvas"></canvas>
+    <div id="drop-zone">
+      <div class="drop-icon">🎮</div>
+      <div class="drop-title">Drop Spritesheet Here</div>
+      <div class="drop-sub">or click to browse</div>
+      <button class="file-btn" onclick="document.getElementById('file-input').click()">Choose File</button>
+      <div class="drop-formats">PNG · JPG · GIF · WEBP</div>
+      <input type="file" id="file-input" accept="image/png,image/jpeg,image/gif,image/webp">
+    </div>
+    <div id="progress-bar"></div>
+    <div id="zoom-bar">
+      <button onclick="zoomTo(zoomScale-0.25)">−</button>
+      <div id="zoom-label">100%</div>
+      <button onclick="zoomTo(zoomScale+0.25)">+</button>
+      <div class="zoom-sep"></div>
+      <button onclick="zoomFit()" style="font-size:11px;letter-spacing:0">⊡ Fit</button>
+      <button onclick="zoomTo(1)" style="font-size:11px;letter-spacing:0">1:1</button>
+      <button onclick="zoomTo(2)" style="font-size:11px;letter-spacing:0">2×</button>
+    </div>
+    <div id="nav-hint">Scroll to zoom · Drag to pan · Arrow keys scroll</div>
+    <div id="retry-indicator">
+      <div class="retry-title">⟳ RETRYING DETECTION</div>
+      <div class="retry-sub" id="retry-desc">Adjusting parameters…</div>
+    </div>
+  </div>
+
+  <!-- RIGHT RESULTS -->
+  <div id="results">
+    <div id="results-header">
+      <div class="results-title">Sprites Found</div>
+      <div class="results-count" id="results-count">0</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 16px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);">
+      <label class="toggle-switch"><input type="checkbox" id="remove-bg-toggle"><span class="toggle-knob"></span></label>
+      Remove BG on Export
+    </div>
+    <input type="text" id="search-box" placeholder="Filter sprites…">
+    <div id="sprite-list">
+      <div class="empty-state"><div>🗂️</div>Load a spritesheet and click Detect</div>
+    </div>
+    <div id="export-bar">
+      <button id="exp-sheet" disabled onclick="exportSheet()" class="exp-sheet-btn" style="min-width:100%;margin-bottom:4px">⬇ EXPORT SPRITE SHEET</button>
+      <button id="exp-json"  disabled onclick="exportJSON()">JSON</button>
+      <button id="exp-csv"   disabled onclick="exportCSV()">CSV</button>
+      <button id="exp-copy"  disabled onclick="copyAll()">COPY</button>
+    </div>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════════════════
+let imgEl=null, imgW=0, imgH=0;
+let sprites=[], activeIdx=-1;
+let zoomScale=1, panX=0, panY=0;
+let isPanning=false, lastMX=0, lastMY=0;
+let retryAttempt=0, lastDetectParams=null;
+let currentMode='auto';
+let seamLinesH=[], seamLinesV=[]; // pixel coords of detected seam lines
+
+// Offscreen overlay cache — avoids redrawing all sprites on every pan/zoom frame
+let _ovOffscreen=null, _ovDirty=true;
+function markOverlayDirty(){ _ovDirty=true; }
+
+const imgCanvas = document.getElementById('img-canvas');
+const ovCanvas  = document.getElementById('overlay-canvas');
+const imgCtx    = imgCanvas.getContext('2d');
+const ovCtx     = ovCanvas.getContext('2d');
+const dropZone  = document.getElementById('drop-zone');
+const canvasWrap= document.getElementById('canvas-wrap');
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UI WIRING
+// ══════════════════════════════════════════════════════════════════════════════
+function wireSlider(id,valId){
+  const el=document.getElementById(id), vl=document.getElementById(valId);
+  el.addEventListener('input',()=>{ vl.textContent=el.value; });
+}
+['tolerance tol-val','min-w mw-val','min-h mh-val','padding pad-val','merge-gap gap-val',
+ 'max-ratio ratio-val','grid-w gw-val','grid-h gh-val','offset-x ox-val','offset-y oy-val',
+ 'spacing sp-val','seam-thresh st-val','seam-min-w sw-val']
+ .forEach(s=>{ const [a,b]=s.split(' '); wireSlider(a,b); });
+
+document.getElementById('detect-btn').addEventListener('click',()=>{ retryAttempt=0; runDetect(); });
+document.getElementById('retry-btn').addEventListener('click', runRetry);
+document.getElementById('reset-btn').addEventListener('click', resetAll);
+document.getElementById('show-index').addEventListener('change', ()=>{ markOverlayDirty(); drawOverlay(); });
+document.getElementById('show-bg').addEventListener('change', ()=>{ markOverlayDirty(); drawOverlay(); });
+document.getElementById('show-seams').addEventListener('change', ()=>{ markOverlayDirty(); drawOverlay(); });
+document.getElementById('search-box').addEventListener('input', renderList);
+
+setTimeout(()=>{ const h=document.getElementById('nav-hint'); if(h) h.classList.add('fade'); }, 3500);
+
+function setMode(m){
+  currentMode=m;
+  ['auto','grid','seam'].forEach(t=>{
+    document.getElementById('tab-'+t).classList.toggle('active',t===m);
+    document.getElementById('panel-'+t).classList.toggle('active',t===m);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FILE HANDLING
+// ══════════════════════════════════════════════════════════════════════════════
+['dragenter','dragover'].forEach(e=>{
+  dropZone.addEventListener(e,ev=>{ ev.preventDefault(); dropZone.classList.add('drag-over'); });
+  document.body.addEventListener(e,ev=>ev.preventDefault());
+});
+['dragleave','drop'].forEach(e=>dropZone.addEventListener(e,()=>dropZone.classList.remove('drag-over')));
+dropZone.addEventListener('drop',ev=>{ ev.preventDefault(); const f=ev.dataTransfer.files[0]; if(f&&f.type.startsWith('image/')) loadFile(f); });
+dropZone.addEventListener('click',ev=>{ if(ev.target!==dropZone&&ev.target.tagName!=='DIV'&&ev.target.tagName!=='P') return; document.getElementById('file-input').click(); });
+document.getElementById('file-input').addEventListener('change',ev=>{ if(ev.target.files[0]) loadFile(ev.target.files[0]); });
+
+function loadFile(file){
+  const url=URL.createObjectURL(file);
+  imgEl=new Image();
+  imgEl.onload=()=>{
+    imgW=imgEl.naturalWidth; imgH=imgEl.naturalHeight;
+    document.getElementById('stat-size').textContent=imgW+'×'+imgH;
+    dropZone.classList.add('hidden');
+    sprites=[]; activeIdx=-1; retryAttempt=0; seamLinesH=[]; seamLinesV=[];
+    renderCanvases(); zoomFit();
+    document.getElementById('detect-btn').disabled=false;
+    document.getElementById('reset-btn').disabled=false;
+    document.getElementById('retry-btn').disabled=true;
+    document.getElementById('retry-info').style.display='none';
+    updateResultsPanel();
+    URL.revokeObjectURL(url);
+  };
+  imgEl.src=url;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CANVAS RENDERING
+// ══════════════════════════════════════════════════════════════════════════════
+function renderCanvases(){
+  const wrap=canvasWrap.getBoundingClientRect();
+  imgCanvas.width=ovCanvas.width=wrap.width;
+  imgCanvas.height=ovCanvas.height=wrap.height;
+  drawImage(); drawOverlay();
+}
+
+function drawImage(){
+  imgCtx.clearRect(0,0,imgCanvas.width,imgCanvas.height);
+  if(!imgEl) return;
+  imgCtx.save();
+  imgCtx.translate(panX,panY); imgCtx.scale(zoomScale,zoomScale);
+  imgCtx.imageSmoothingEnabled=zoomScale<2;
+  imgCtx.drawImage(imgEl,0,0);
+  imgCtx.restore();
+}
+
+const COLORS=['#00e5ff','#ff5c5c','#39ff88','#ffd166','#ff88ff','#88ddff','#ff9f43','#a29bfe','#fd79a8','#55efc4'];
+function spriteColor(i){ return COLORS[i%COLORS.length]; }
+
+function _rebuildOverlayCache(){
+  if(!imgEl) return;
+  const showBg=document.getElementById('show-bg').checked;
+  const showIdx=document.getElementById('show-index').checked;
+  const showSeams=document.getElementById('show-seams').checked;
+
+  // Build at 1:1 image resolution
+  if(!_ovOffscreen||_ovOffscreen.width!==imgW||_ovOffscreen.height!==imgH){
+    _ovOffscreen=document.createElement('canvas');
+    _ovOffscreen.width=imgW; _ovOffscreen.height=imgH;
+  }
+  const ctx=_ovOffscreen.getContext('2d');
+  ctx.clearRect(0,0,imgW,imgH);
+
+  if(showBg && window._bgMask){
+    const id=ctx.createImageData(imgW,imgH); const d=id.data;
+    for(let i=0;i<window._bgMask.length;i++){
+      if(window._bgMask[i]){ d[i*4]=255;d[i*4+1]=0;d[i*4+2]=0;d[i*4+3]=65; }
+    }
+    ctx.putImageData(id,0,0);
+  }
+
+  if(showSeams){
+    ctx.save();
+    ctx.strokeStyle='rgba(255,210,0,0.55)';
+    ctx.lineWidth=1;
+    ctx.setLineDash([3,3]);
+    seamLinesV.forEach(x=>{ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,imgH); ctx.stroke(); });
+    seamLinesH.forEach(y=>{ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(imgW,y); ctx.stroke(); });
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // Batch all sprite rects — group by color for fewer state changes
+  const STROKE_W=1, ACTIVE_W=2;
+  const byColor={};
+  sprites.forEach((sp,i)=>{
+    const col=spriteColor(i);
+    if(!byColor[col]) byColor[col]={fills:[],strokes:[],activeStrokes:[]};
+    const isActive=i===activeIdx;
+    if(isActive) byColor[col].activeStrokes.push(sp);
+    else byColor[col].strokes.push(sp);
+    byColor[col].fills.push({sp,isActive});
+  });
+
+  for(const [col,group] of Object.entries(byColor)){
+    // Fills (semi-transparent)
+    ctx.fillStyle=col+'15';
+    group.fills.forEach(({sp,isActive})=>{ if(!isActive) ctx.fillRect(sp.x,sp.y,sp.w,sp.h); });
+    ctx.fillStyle=col+'30';
+    group.fills.forEach(({sp,isActive})=>{ if(isActive) ctx.fillRect(sp.x,sp.y,sp.w,sp.h); });
+
+    // Normal strokes
+    ctx.strokeStyle=col; ctx.lineWidth=STROKE_W;
+    ctx.beginPath();
+    group.strokes.forEach(sp=>{ ctx.rect(sp.x+.5,sp.y+.5,sp.w,sp.h); });
+    ctx.stroke();
+
+    // Active strokes
+    if(group.activeStrokes.length){
+      ctx.lineWidth=ACTIVE_W;
+      ctx.beginPath();
+      group.activeStrokes.forEach(sp=>{ ctx.rect(sp.x+1,sp.y+1,sp.w,sp.h); });
+      ctx.stroke();
+    }
+  }
+
+  // Index numbers — only draw if zoomed in enough to be legible
+  if(showIdx && sprites.length <= 2000){
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    sprites.forEach((sp,i)=>{
+      const fs=Math.max(6,Math.min(11,sp.h*.35,sp.w*.35));
+      ctx.font=`bold ${fs}px "IBM Plex Mono"`;
+      ctx.fillStyle='#fff';
+      ctx.fillText(i+1,sp.x+sp.w/2,sp.y+sp.h/2);
+    });
+  }
+
+  _ovDirty=false;
+}
+
+function drawOverlay(){
+  ovCtx.clearRect(0,0,ovCanvas.width,ovCanvas.height);
+  if(!imgEl) return;
+
+  // Rebuild cache only when sprites/settings changed, not on every pan/zoom
+  if(_ovDirty) _rebuildOverlayCache();
+  if(!_ovOffscreen) return;
+
+  ovCtx.save();
+  ovCtx.translate(panX,panY); ovCtx.scale(zoomScale,zoomScale);
+  ovCtx.drawImage(_ovOffscreen,0,0);
+  ovCtx.restore();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ZOOM & PAN
+// ══════════════════════════════════════════════════════════════════════════════
+function zoomTo(ns,cx,cy){
+  if(cx===undefined){cx=canvasWrap.clientWidth/2;cy=canvasWrap.clientHeight/2;}
+  ns=Math.max(0.05,Math.min(32,ns));
+  const r=ns/zoomScale; panX=cx-r*(cx-panX); panY=cy-r*(cy-panY);
+  zoomScale=ns; document.getElementById('zoom-label').textContent=Math.round(ns*100)+'%';
+  drawImage(); drawOverlay();
+}
+function zoomFit(){
+  if(!imgEl) return;
+  const wrap=canvasWrap.getBoundingClientRect();
+  zoomScale=Math.min(wrap.width/imgW,wrap.height/imgH)*0.92;
+  panX=(wrap.width-imgW*zoomScale)/2; panY=(wrap.height-imgH*zoomScale)/2;
+  document.getElementById('zoom-label').textContent=Math.round(zoomScale*100)+'%';
+  drawImage(); drawOverlay();
+}
+
+canvasWrap.addEventListener('wheel',ev=>{
+  ev.preventDefault();
+  const r=canvasWrap.getBoundingClientRect();
+  zoomTo(zoomScale*(ev.deltaY<0?1.12:1/1.12),ev.clientX-r.left,ev.clientY-r.top);
+},{passive:false});
+
+let lastPinchDist=null;
+canvasWrap.addEventListener('touchstart',ev=>{ if(ev.touches.length===2) lastPinchDist=Math.hypot(ev.touches[0].clientX-ev.touches[1].clientX,ev.touches[0].clientY-ev.touches[1].clientY); },{passive:true});
+canvasWrap.addEventListener('touchmove',ev=>{
+  if(ev.touches.length===2&&lastPinchDist!==null){
+    ev.preventDefault();
+    const d=Math.hypot(ev.touches[0].clientX-ev.touches[1].clientX,ev.touches[0].clientY-ev.touches[1].clientY);
+    const cx=(ev.touches[0].clientX+ev.touches[1].clientX)/2-canvasWrap.getBoundingClientRect().left;
+    const cy=(ev.touches[0].clientY+ev.touches[1].clientY)/2-canvasWrap.getBoundingClientRect().top;
+    zoomTo(zoomScale*(d/lastPinchDist),cx,cy); lastPinchDist=d;
+  }
+},{passive:false});
+canvasWrap.addEventListener('touchend',()=>{ lastPinchDist=null; });
+
+canvasWrap.addEventListener('mousedown',ev=>{ if(ev.button===1||ev.button===0){isPanning=true;lastMX=ev.clientX;lastMY=ev.clientY;} });
+window.addEventListener('mousemove',ev=>{ if(!isPanning) return; panX+=ev.clientX-lastMX; panY+=ev.clientY-lastMY; lastMX=ev.clientX; lastMY=ev.clientY; drawImage(); drawOverlay(); });
+window.addEventListener('mouseup',()=>{ isPanning=false; });
+
+let lastTX=0,lastTY=0;
+canvasWrap.addEventListener('touchstart',ev=>{ if(ev.touches.length===1){lastTX=ev.touches[0].clientX;lastTY=ev.touches[0].clientY;} },{passive:true});
+canvasWrap.addEventListener('touchmove',ev=>{ if(ev.touches.length===1){ev.preventDefault();panX+=ev.touches[0].clientX-lastTX;panY+=ev.touches[0].clientY-lastTY;lastTX=ev.touches[0].clientX;lastTY=ev.touches[0].clientY;drawImage();drawOverlay();} },{passive:false});
+
+window.addEventListener('keydown',ev=>{
+  if(!imgEl) return;
+  if(ev.key==='+'||ev.key==='=') zoomTo(zoomScale*1.2);
+  if(ev.key==='-') zoomTo(zoomScale/1.2);
+  if(ev.key==='0') zoomFit();
+  if(ev.key==='1') zoomTo(1);
+  if(ev.key==='ArrowRight'){panX-=40;drawImage();drawOverlay();}
+  if(ev.key==='ArrowLeft') {panX+=40;drawImage();drawOverlay();}
+  if(ev.key==='ArrowDown') {panY-=40;drawImage();drawOverlay();}
+  if(ev.key==='ArrowUp')   {panY+=40;drawImage();drawOverlay();}
+});
+window.addEventListener('resize',()=>{ if(imgEl) renderCanvases(); });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BACKGROUND HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+function getPixelColor(data,x,y,w){ const i=(y*w+x)*4; return [data[i],data[i+1],data[i+2],data[i+3]]; }
+function colorDist(r1,g1,b1,r2,g2,b2){ return Math.sqrt((r1-r2)**2+(g1-g2)**2+(b1-b2)**2); }
+function addBgColor(bgColors,data,x,y,w,tolerance){
+  const [r,g,b,a]=getPixelColor(data,x,y,w); if(a<16) return;
+  for(const c of bgColors){ if(colorDist(r,g,b,c[0],c[1],c[2])<=tolerance){c[0]=(c[0]+r)>>1;c[1]=(c[1]+g)>>1;c[2]=(c[2]+b)>>1;return;} }
+  bgColors.push([r,g,b]);
+}
+function matchesBg(r,g,b,bgColors,tolerance){ for(const c of bgColors){ if(colorDist(r,g,b,c[0],c[1],c[2])<=tolerance) return true; } return false; }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// RECT HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+function rectsOverlapWithGap(a,b,gap){
+  return !(a.x+a.w+gap<b.x||b.x+b.w+gap<a.x||a.y+a.h+gap<b.y||b.y+b.h+gap<a.y);
+}
+function mergeTwo(a,b){
+  const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y);
+  return{x,y,w:Math.max(a.x+a.w,b.x+b.w)-x,h:Math.max(a.y+a.h,b.y+b.h)-y};
+}
+function mergeRects(rects,gap){
+  let changed=true, arr=[...rects];
+  while(changed){ changed=false; outer: for(let i=0;i<arr.length;i++) for(let j=i+1;j<arr.length;j++) if(rectsOverlapWithGap(arr[i],arr[j],gap)){arr[i]=mergeTwo(arr[i],arr[j]);arr.splice(j,1);changed=true;break outer;} }
+  return arr;
+}
+function removeContained(rects,thresh=0.80){
+  return rects.filter((a,ai)=>{
+    for(let bi=0;bi<rects.length;bi++){
+      if(ai===bi) continue;
+      const b=rects[bi];
+      const ix1=Math.max(a.x,b.x),iy1=Math.max(a.y,b.y),ix2=Math.min(a.x+a.w,b.x+b.w),iy2=Math.min(a.y+a.h,b.y+b.h);
+      if(ix2<=ix1||iy2<=iy1) continue;
+      const inter=(ix2-ix1)*(iy2-iy1), aArea=a.w*a.h;
+      if(aArea>0&&inter/aArea>=thresh&&aArea<b.w*b.h) return false;
+    }
+    return true;
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PROGRESS
+// ══════════════════════════════════════════════════════════════════════════════
+function setProgress(p){ document.getElementById('progress-bar').style.width=p+'%'; }
+function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ██████████ DETECTION ENGINE ██████████
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Build foreground mask (shared by multiple methods)
+// ─────────────────────────────────────────────────────────────────────────────
+function buildMask(data, p){
+  const bgColors=[];
+  if(p.edgeSample){
+    const step=Math.max(1,Math.floor(Math.min(imgW,imgH)/200));
+    for(let x=0;x<imgW;x+=step) addBgColor(bgColors,data,x,0,imgW,p.tolerance);
+    for(let x=0;x<imgW;x+=step) addBgColor(bgColors,data,x,imgH-1,imgW,p.tolerance);
+    for(let y=0;y<imgH;y+=step) addBgColor(bgColors,data,0,y,imgW,p.tolerance);
+    for(let y=0;y<imgH;y+=step) addBgColor(bgColors,data,imgW-1,y,imgW,p.tolerance);
+  }
+  const mask=new Uint8Array(imgW*imgH);
+  for(let i=0;i<imgW*imgH;i++){
+    const r=data[i*4],g=data[i*4+1],b=data[i*4+2],a=data[i*4+3];
+    let isBg=false;
+    if(p.useAlpha&&a<16) isBg=true;
+    else if(p.edgeSample&&bgColors.length>0) isBg=matchesBg(r,g,b,bgColors,p.tolerance);
+    if(!isBg) mask[i]=1;
+  }
+  window._bgMask=mask.map(v=>v===0?1:0);
+  return {mask, bgColors};
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// METHOD A: Standard BFS flood-fill connected components
+// ─────────────────────────────────────────────────────────────────────────────
+function detectBFS(mask, p){
+  const visited=new Uint8Array(imgW*imgH);
+  const result=[];
+  const queue=new Int32Array(imgW*imgH);
+  for(let startIdx=0;startIdx<imgW*imgH;startIdx++){
+    if(!mask[startIdx]||visited[startIdx]) continue;
+    let head=0,tail=0;
+    queue[tail++]=startIdx; visited[startIdx]=1;
+    let minX=startIdx%imgW,maxX=minX,minY=Math.floor(startIdx/imgW),maxY=minY;
+    while(head<tail){
+      const idx=queue[head++];
+      const cx=idx%imgW, cy=(idx-cx)/imgW;
+      if(cx<minX)minX=cx;if(cx>maxX)maxX=cx;if(cy<minY)minY=cy;if(cy>maxY)maxY=cy;
+      const n4=[idx-1,idx+1,idx-imgW,idx+imgW];
+      const n8=p.eightConn?[idx-imgW-1,idx-imgW+1,idx+imgW-1,idx+imgW+1]:[];
+      for(const n of [...n4,...n8]){
+        if(n<0||n>=imgW*imgH) continue;
+        const nx=n%imgW;
+        if(Math.abs(nx-cx)>1&&Math.abs(idx-n)===1) continue;
+        if(mask[n]&&!visited[n]){visited[n]=1;queue[tail++]=n;}
+      }
+    }
+    const w=maxX-minX+1, h=maxY-minY+1;
+    if(w<p.minW||h<p.minH) continue;
+    const ratio=Math.max(w,h)/Math.min(w,h);
+    if(ratio>p.maxRatio) continue;
+    result.push({x:minX,y:minY,w,h});
+  }
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// METHOD B: Projection/Seam analysis
+//
+// Core insight: build a horizontal projection (fg pixels per row) and vertical
+// projection (fg pixels per column). Find "valleys" — runs of rows/cols with
+// low fg coverage — as cut lines between sprites.
+//
+// This works even when sprites TOUCH because cut lines often have fewer fg
+// pixels than the body of the sprite, even if not zero.
+// ─────────────────────────────────────────────────────────────────────────────
+function detectBySeams(mask, p, seamThresh, seamMinW){
+  // Build projections
+  const rowProj=new Float32Array(imgH); // fg pixels per row
+  const colProj=new Float32Array(imgW); // fg pixels per col
+  for(let y=0;y<imgH;y++){
+    let cnt=0;
+    for(let x=0;x<imgW;x++) if(mask[y*imgW+x]) cnt++;
+    rowProj[y]=cnt;
+  }
+  for(let x=0;x<imgW;x++){
+    let cnt=0;
+    for(let y=0;y<imgH;y++) if(mask[y*imgW+x]) cnt++;
+    colProj[x]=cnt;
+  }
+
+  // Normalize projections to 0-100 range relative to max
+  const maxR=Math.max(...rowProj)||1, maxC=Math.max(...colProj)||1;
+  const rowN=rowProj.map(v=>v/maxR*100);
+  const colN=colProj.map(v=>v/maxC*100);
+
+  // Find valley boundaries (seams) below threshold
+  const thresh=seamThresh; // % of max
+  function findSeams(proj, size){
+    const seams=[]; // list of {start,end} in pixel coords
+    let inSeam=false, seamStart=0;
+    for(let i=0;i<size;i++){
+      if(proj[i]<=thresh){
+        if(!inSeam){inSeam=true;seamStart=i;}
+      } else {
+        if(inSeam){
+          const seamEnd=i-1;
+          const width=seamEnd-seamStart+1;
+          if(width>=seamMinW) seams.push({start:seamStart,end:seamEnd,mid:Math.floor((seamStart+seamEnd)/2)});
+          inSeam=false;
+        }
+      }
+    }
+    if(inSeam){ const seamEnd=size-1; const width=seamEnd-seamStart+1; if(width>=seamMinW) seams.push({start:seamStart,end:seamEnd,mid:Math.floor((seamStart+seamEnd)/2)}); }
+    return seams;
+  }
+
+  const hSeams=findSeams(rowN,imgH); // horizontal cuts (between rows of sprites)
+  const vSeams=findSeams(colN,imgW); // vertical cuts (between cols of sprites)
+
+  // Store seam line positions for display
+  seamLinesH=hSeams.map(s=>s.mid);
+  seamLinesV=vSeams.map(s=>s.mid);
+
+  // Build cut lists: boundaries of each cell region
+  // hCuts: list of {y1,y2} for each row band
+  // vCuts: list of {x1,x2} for each col band
+  function makeBands(seams, size){
+    const bands=[];
+    let prev=0;
+    for(const s of seams){
+      if(s.start>prev) bands.push({start:prev,end:s.start-1});
+      prev=s.end+1;
+    }
+    if(prev<size) bands.push({start:prev,end:size-1});
+    return bands;
+  }
+
+  const rowBands=makeBands(hSeams,imgH);
+  const colBands=makeBands(vSeams,imgW);
+
+  // For each cell (rowBand x colBand), check if it has enough fg pixels
+  const result=[];
+  for(const rb of rowBands){
+    for(const cb of colBands){
+      // Count fg pixels in this cell
+      let fgCount=0;
+      const cellW=cb.end-cb.start+1, cellH=rb.end-rb.start+1;
+      for(let y=rb.start;y<=rb.end;y++){
+        for(let x=cb.start;x<=cb.end;x++){
+          if(mask[y*imgW+x]) fgCount++;
+        }
+      }
+      const fillRatio=fgCount/(cellW*cellH);
+      // Only accept cells with some minimum fill
+      if(fillRatio<0.01||cellW<p.minW||cellH<p.minH) continue;
+
+      // Find tight bounds within the cell
+      let minX=cb.end,maxX=cb.start,minY=rb.end,maxY=rb.start;
+      let found=false;
+      for(let y=rb.start;y<=rb.end;y++){
+        for(let x=cb.start;x<=cb.end;x++){
+          if(mask[y*imgW+x]){
+            if(x<minX)minX=x; if(x>maxX)maxX=x;
+            if(y<minY)minY=y; if(y>maxY)maxY=y;
+            found=true;
+          }
+        }
+      }
+      if(!found) continue;
+      const w=maxX-minX+1, h=maxY-minY+1;
+      if(w<p.minW||h<p.minH) continue;
+      const ratio=Math.max(w,h)/Math.min(w,h);
+      if(ratio>p.maxRatio) continue;
+      result.push({x:minX,y:minY,w,h});
+    }
+  }
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// METHOD C: Adaptive projection — works on sub-regions recursively
+//
+// Key innovation: For tightly packed sheets where global seams may not exist,
+// we first split the sheet into large "blocks" using BFS, then within each
+// block that is suspiciously large (likely merged sprites), we apply local
+// projection splitting.
+// ─────────────────────────────────────────────────────────────────────────────
+function detectAdaptive(mask, p){
+  // Step 1: rough BFS with generous merge to get large blobs
+  const roughBFS=detectBFS(mask,{...p,minW:1,minH:1,maxRatio:99,mergeNear:false});
+  if(roughBFS.length===0) return [];
+
+  // Compute median sprite size from known-good small sprites
+  const areas=roughBFS.map(s=>s.w*s.h).sort((a,b)=>a-b);
+  const medianArea=areas[Math.floor(areas.length/2)];
+  const medianDim=Math.sqrt(medianArea);
+
+  // Step 2: For each BFS rect, decide if it's a single sprite or a merged blob
+  const result=[];
+  for(const blob of roughBFS){
+    const blobArea=blob.w*blob.h;
+    // If this blob is very large compared to median (>3x), try to sub-split it
+    if(blobArea > medianArea*2.5 && (blob.w>medianDim*1.5||blob.h>medianDim*1.5)){
+      const subSprites=splitBlob(mask,blob,p,medianDim);
+      if(subSprites.length>0) result.push(...subSprites);
+      else result.push(blob); // keep original if splitting failed
+    } else {
+      if(blob.w>=p.minW&&blob.h>=p.minH){
+        const r=Math.max(blob.w,blob.h)/Math.min(blob.w,blob.h);
+        if(r<=p.maxRatio) result.push(blob);
+      }
+    }
+  }
+  return result;
+}
+
+// Sub-split a large merged blob using local projection analysis
+function splitBlob(mask, blob, p, hintSize){
+  // Extract local mask for this blob
+  const bw=blob.w, bh=blob.h;
+  const localMask=new Uint8Array(bw*bh);
+  for(let y=0;y<bh;y++){
+    for(let x=0;x<bw;x++){
+      localMask[y*bw+x]=mask[(blob.y+y)*imgW+(blob.x+x)];
+    }
+  }
+
+  // Build local projections
+  const rowP=new Float32Array(bh), colP=new Float32Array(bw);
+  for(let y=0;y<bh;y++) for(let x=0;x<bw;x++) if(localMask[y*bw+x]){rowP[y]++;colP[x]++;}
+
+  // Smooth projections to reduce noise
+  function smooth(arr,r=2){
+    const out=new Float32Array(arr.length);
+    for(let i=0;i<arr.length;i++){
+      let s=0,c=0;
+      for(let j=Math.max(0,i-r);j<=Math.min(arr.length-1,i+r);j++){s+=arr[j];c++;}
+      out[i]=s/c;
+    }
+    return out;
+  }
+  const rowSmooth=smooth(rowP,2), colSmooth=smooth(colP,2);
+
+  // Find local minima as potential cut lines
+  // A local minimum is a point lower than its neighbors by a certain margin
+  function findLocalMinima(arr,windowSize){
+    const cuts=[];
+    const half=Math.floor(windowSize/2);
+    for(let i=half;i<arr.length-half;i++){
+      let isMin=true;
+      for(let j=i-half;j<=i+half;j++){
+        if(j!==i&&arr[j]<=arr[i]) isMin=false;
+      }
+      if(isMin&&arr[i]<arr[i-1]*0.7&&arr[i]<arr[i+1]*0.7) cuts.push(i);
+    }
+    return cuts;
+  }
+
+  // Also find "valley floors" — runs of low values between peaks
+  function findValleys(arr,threshold_ratio,minGap){
+    const peaks=[];
+    // Find peaks first
+    for(let i=1;i<arr.length-1;i++){
+      if(arr[i]>arr[i-1]&&arr[i]>arr[i+1]) peaks.push(arr[i]);
+    }
+    if(peaks.length===0) return [];
+    peaks.sort((a,b)=>b-a);
+    const globalMax=peaks[0]||1;
+    const threshold=globalMax*threshold_ratio;
+
+    const valleys=[]; let inValley=false,vs=0;
+    for(let i=0;i<arr.length;i++){
+      if(arr[i]<threshold){
+        if(!inValley){inValley=true;vs=i;}
+      } else {
+        if(inValley){
+          const ve=i-1;
+          if(ve-vs+1>=minGap) valleys.push(Math.floor((vs+ve)/2));
+          inValley=false;
+        }
+      }
+    }
+    if(inValley){const ve=arr.length-1;if(ve-vs+1>=minGap)valleys.push(Math.floor((vs+ve)/2));}
+    return valleys;
+  }
+
+  // Estimate number of sprites in each direction
+  const estCountX=Math.max(1,Math.round(bw/hintSize));
+  const estCountY=Math.max(1,Math.round(bh/hintSize));
+
+  let vCuts=[],hCuts=[];
+
+  if(estCountX>1){
+    // Try valley detection
+    vCuts=findValleys(colSmooth,0.35,1);
+    // If not enough cuts, try to force splits based on estimated count
+    if(vCuts.length<estCountX-1){
+      vCuts=[];
+      for(let i=1;i<estCountX;i++) vCuts.push(Math.round(i*bw/estCountX));
+    }
+  }
+  if(estCountY>1){
+    hCuts=findValleys(rowSmooth,0.35,1);
+    if(hCuts.length<estCountY-1){
+      hCuts=[];
+      for(let i=1;i<estCountY;i++) hCuts.push(Math.round(i*bh/estCountY));
+    }
+  }
+
+  if(vCuts.length===0&&hCuts.length===0) return []; // can't split
+
+  // Build cut-bounded regions
+  const xBreaks=[0,...vCuts.sort((a,b)=>a-b),bw];
+  const yBreaks=[0,...hCuts.sort((a,b)=>a-b),bh];
+
+  const subSprites=[];
+  for(let ri=0;ri<yBreaks.length-1;ri++){
+    for(let ci=0;ci<xBreaks.length-1;ci++){
+      const lx=xBreaks[ci], ly=yBreaks[ri];
+      const lw=xBreaks[ci+1]-lx, lh=yBreaks[ri+1]-ly;
+      // Find tight bounds within this cell
+      let minX=lw,maxX=-1,minY=lh,maxY=-1;
+      for(let y=ly;y<ly+lh;y++) for(let x=lx;x<lx+lw;x++){
+        if(localMask[y*bw+x]){if(x-lx<minX)minX=x-lx;if(x-lx>maxX)maxX=x-lx;if(y-ly<minY)minY=y-ly;if(y-ly>maxY)maxY=y-ly;}
+      }
+      if(maxX<0) continue; // empty cell
+      const sw=maxX-minX+1, sh=maxY-minY+1;
+      if(sw<p.minW||sh<p.minH) continue;
+      const ratio=Math.max(sw,sh)/Math.min(sw,sh);
+      if(ratio>p.maxRatio) continue;
+      subSprites.push({x:blob.x+lx+minX, y:blob.y+ly+minY, w:sw, h:sh});
+    }
+  }
+  return subSprites;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// METHOD D: Fixed Grid
+// ─────────────────────────────────────────────────────────────────────────────
+function detectGrid(mask, p){
+  const cw=parseInt(document.getElementById('grid-w').value);
+  const ch=parseInt(document.getElementById('grid-h').value);
+  const ox=parseInt(document.getElementById('offset-x').value);
+  const oy=parseInt(document.getElementById('offset-y').value);
+  const spacing=parseInt(document.getElementById('spacing').value);
+  const skipEmpty=document.getElementById('grid-skip-empty').checked;
+
+  const result=[];
+  for(let gy=oy; gy+ch<=imgH; gy+=ch+spacing){
+    for(let gx=ox; gx+cw<=imgW; gx+=cw+spacing){
+      if(skipEmpty){
+        let fgCount=0;
+        for(let y=gy;y<gy+ch;y++) for(let x=gx;x<gx+cw;x++) if(mask[y*imgW+x]) fgCount++;
+        if(fgCount<4) continue;
+      }
+      result.push({x:gx,y:gy,w:cw,h:ch});
+    }
+  }
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HYBRID AUTO: tries multiple methods and picks best result
+// ─────────────────────────────────────────────────────────────────────────────
+async function detectAuto(mask, p){
+  setProgress(40); await delay(0);
+
+  // Method 1: Pure BFS
+  const bfsResult=detectBFS(mask,p);
+  setProgress(50); await delay(0);
+
+  // Method 2: Seam-based
+  const seamResult=detectBySeams(mask,p,20,1);
+  setProgress(60); await delay(0);
+
+  // Method 3: Adaptive (splits large blobs)
+  const adaptResult=detectAdaptive(mask,p);
+  setProgress(75); await delay(0);
+
+  // Score each result: we want many sprites of consistent size
+  function scoreResult(rects){
+    if(rects.length===0) return 0;
+    if(rects.length===1) return 0.5; // single huge blob = bad
+    const areas=rects.map(r=>r.w*r.h);
+    const avg=areas.reduce((a,b)=>a+b,0)/areas.length;
+    const variance=areas.reduce((s,a)=>s+(a-avg)**2,0)/areas.length;
+    const stdDev=Math.sqrt(variance);
+    const cv=avg>0?stdDev/avg:1; // coefficient of variation (lower = more consistent)
+    // Score = count * consistency, but penalize huge single-blob results
+    const consistencyScore=1/(1+cv);
+    return rects.length*consistencyScore;
+  }
+
+  const scores=[
+    {name:'BFS',    rects:bfsResult,   score:scoreResult(bfsResult)},
+    {name:'Seam',   rects:seamResult,  score:scoreResult(seamResult)},
+    {name:'Adapt',  rects:adaptResult, score:scoreResult(adaptResult)},
+  ];
+
+  // If seam or adaptive found significantly more sprites than BFS, prefer them
+  // (BFS over-merges, so more = better for dense sheets)
+  const best=scores.sort((a,b)=>b.score-a.score)[0];
+  return best.rects;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MAIN DETECT RUNNER
+// ══════════════════════════════════════════════════════════════════════════════
+async function runDetect(overrideParams){
+  if(!imgEl) return;
+  const t0=performance.now();
+  document.getElementById('detect-btn').disabled=true;
+  document.getElementById('retry-btn').disabled=true;
+
+  const oc=document.createElement('canvas'); oc.width=imgW; oc.height=imgH;
+  const ot=oc.getContext('2d'); ot.drawImage(imgEl,0,0);
+  const imageData=ot.getImageData(0,0,imgW,imgH);
+  const data=imageData.data;
+
+  setProgress(10); await delay(0);
+
+  const p=overrideParams||{
+    tolerance:  parseInt(document.getElementById('tolerance').value),
+    useAlpha:   document.getElementById('use-alpha').checked,
+    edgeSample: document.getElementById('edge-sample').checked,
+    minW:       parseInt(document.getElementById('min-w').value),
+    minH:       parseInt(document.getElementById('min-h').value),
+    padding:    parseInt(document.getElementById('padding').value),
+    eightConn:  document.getElementById('eight-conn').checked,
+    mergeNear:  document.getElementById('merge-near').checked,
+    mergeGap:   parseInt(document.getElementById('merge-gap').value),
+    maxRatio:   parseInt(document.getElementById('max-ratio').value),
+    filterContained: document.getElementById('filter-contained').checked,
+    seamThresh: parseInt(document.getElementById('seam-thresh').value),
+    seamMinW:   parseInt(document.getElementById('seam-min-w').value),
+    mode: currentMode,
+  };
+  lastDetectParams={...p};
+
+  setProgress(20); await delay(0);
+  const {mask}=buildMask(data,p);
+  setProgress(30); await delay(0);
+
+  seamLinesH=[]; seamLinesV=[];
+
+  let raw=[];
+  if(p.mode==='grid'){
+    raw=detectGrid(mask,p);
+  } else if(p.mode==='seam'){
+    raw=detectBySeams(mask,p,p.seamThresh,p.seamMinW);
+    setProgress(70); await delay(0);
+  } else {
+    // AUTO: run hybrid
+    raw=await detectAuto(mask,p);
+  }
+
+  setProgress(78); await delay(0);
+
+  // Post-processing (skip for grid mode — keep cells as-is)
+  let final=raw;
+  if(p.mode!=='grid'){
+    // Apply padding
+    final=raw.map(sp=>({
+      x:Math.max(0,sp.x-p.padding),
+      y:Math.max(0,sp.y-p.padding),
+      w:Math.min(imgW,sp.x+sp.w+p.padding)-Math.max(0,sp.x-p.padding),
+      h:Math.min(imgH,sp.y+sp.h+p.padding)-Math.max(0,sp.y-p.padding),
+    }));
+
+    // Merge nearby
+    if(p.mergeNear) final=mergeRects(final,p.mergeGap);
+
+    // Re-filter
+    final=final.filter(sp=>{
+      if(sp.w<p.minW||sp.h<p.minH) return false;
+      const ratio=Math.max(sp.w,sp.h)/Math.min(sp.w,sp.h);
+      return ratio<=p.maxRatio;
+    });
+
+    // Remove contained
+    if(p.filterContained) final=removeContained(final,0.75);
+  }
+
+  // Sort top-left to bottom-right
+  final.sort((a,b)=>a.y!==b.y?a.y-b.y:a.x-b.x);
+
+  setProgress(95); await delay(0);
+
+  sprites=final; activeIdx=-1; markOverlayDirty();
+  const elapsed=(performance.now()-t0).toFixed(1);
+  document.getElementById('stat-count').textContent=sprites.length;
+  document.getElementById('stat-time').textContent=elapsed+'ms';
+
+  renderCanvases();
+  updateResultsPanel();
+  setProgress(100);
+  setTimeout(()=>setProgress(0),400);
+
+  document.getElementById('detect-btn').disabled=false;
+  document.getElementById('retry-btn').disabled=false;
+  document.getElementById('retry-indicator').classList.remove('show');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// RETRY LOGIC — progressive strategies
+// ══════════════════════════════════════════════════════════════════════════════
+async function runRetry(){
+  if(!imgEl||!lastDetectParams) return;
+  retryAttempt++;
+  const ind=document.getElementById('retry-indicator');
+  const desc=document.getElementById('retry-desc');
+  document.getElementById('retry-info').style.display='block';
+  document.getElementById('retry-count').textContent=retryAttempt+1;
+
+  const strategies=[
+    // 1. Switch to SEAM mode with default params
+    {desc:'Switching to seam projection analysis…',
+     mutate:p=>({...p,mode:'seam',seamThresh:15,seamMinW:1,mergeNear:false,filterContained:true})},
+    // 2. Seam with higher threshold (catches noisier seams)
+    {desc:'Seam mode with relaxed threshold…',
+     mutate:p=>({...p,mode:'seam',seamThresh:30,seamMinW:1,mergeNear:false,filterContained:true})},
+    // 3. Auto with bigger merge gap
+    {desc:'Auto mode with increased merge gap…',
+     mutate:p=>({...p,mode:'auto',mergeGap:Math.min(48,p.mergeGap+10),mergeNear:true,filterContained:true})},
+    // 4. Raise tolerance + seam
+    {desc:'Raising background tolerance + seam…',
+     mutate:p=>({...p,mode:'seam',tolerance:Math.min(96,p.tolerance+15),seamThresh:20,filterContained:true})},
+    // 5. Grid auto-detect: estimate cell size from image dims
+    {desc:'Estimating grid cell size automatically…',
+     mutate:p=>{
+       // Heuristic: for Metal Slug style, try common cell sizes
+       document.getElementById('grid-w').value=48; document.getElementById('gw-val').textContent=48;
+       document.getElementById('grid-h').value=64; document.getElementById('gh-val').textContent=64;
+       document.getElementById('offset-x').value=0; document.getElementById('ox-val').textContent=0;
+       document.getElementById('offset-y').value=0; document.getElementById('oy-val').textContent=0;
+       document.getElementById('spacing').value=0; document.getElementById('sp-val').textContent=0;
+       setMode('grid');
+       return {...p,mode:'grid'};
+     }},
+    // 6. Aggressive seam with tiny min sizes
+    {desc:'Fine-grained seam scan with small minimum sizes…',
+     mutate:p=>({...p,mode:'seam',seamThresh:10,seamMinW:1,minW:4,minH:4,mergeNear:false,filterContained:true,maxRatio:20})},
+  ];
+
+  const si=Math.min(retryAttempt-1,strategies.length-1);
+  const strat=strategies[si];
+  desc.textContent=strat.desc;
+  ind.classList.add('show');
+
+  const newParams=strat.mutate({...lastDetectParams});
+  // Update UI sliders
+  document.getElementById('merge-gap').value=newParams.mergeGap||3;
+  document.getElementById('gap-val').textContent=newParams.mergeGap||3;
+  document.getElementById('min-w').value=newParams.minW;
+  document.getElementById('mw-val').textContent=newParams.minW;
+  document.getElementById('min-h').value=newParams.minH;
+  document.getElementById('mh-val').textContent=newParams.minH;
+  document.getElementById('tolerance').value=newParams.tolerance;
+  document.getElementById('tol-val').textContent=newParams.tolerance;
+  document.getElementById('merge-near').checked=!!newParams.mergeNear;
+  document.getElementById('filter-contained').checked=!!newParams.filterContained;
+  document.getElementById('seam-thresh').value=newParams.seamThresh||20;
+  document.getElementById('st-val').textContent=newParams.seamThresh||20;
+  if(newParams.mode&&newParams.mode!==currentMode) setMode(newParams.mode);
+
+  await delay(100);
+  await runDetect(newParams);
+  showToast(`Retry #${retryAttempt} — ${sprites.length} sprites found`);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// RESULTS PANEL
+// ══════════════════════════════════════════════════════════════════════════════
+function updateResultsPanel(){
+  document.getElementById('results-count').textContent=sprites.length;
+  const ok=sprites.length>0;
+  ['exp-json','exp-csv','exp-copy','exp-sheet'].forEach(id=>document.getElementById(id).disabled=!ok);
+  renderList();
+}
+
+// ── Virtual scroll for sprite list ──────────────────────────────────────────
+const ITEM_H=46; // px height of each sprite-item (must match CSS padding+font)
+let _vsFiltered=[]; // cached filtered list
+
+function renderList(){
+  const listEl=document.getElementById('sprite-list');
+  const q=document.getElementById('search-box').value.toLowerCase();
+  if(sprites.length===0){
+    listEl.innerHTML='<div class="empty-state"><div>🗂️</div>No sprites detected yet</div>';
+    _vsFiltered=[];
+    return;
+  }
+  _vsFiltered=sprites.map((sp,i)=>({sp,i})).filter(({sp,i})=>{
+    if(!q) return true;
+    return String(i+1).includes(q)||`${sp.x},${sp.y},${sp.w},${sp.h}`.includes(q);
+  });
+  _vsRender(listEl);
+}
+
+function _vsRender(listEl){
+  const total=_vsFiltered.length;
+  if(total===0){ listEl.innerHTML='<div class="empty-state"><div>🔍</div>No matches</div>'; return; }
+
+  const scrollTop=listEl.scrollTop;
+  const viewH=listEl.clientHeight||400;
+  const startIdx=Math.max(0,Math.floor(scrollTop/ITEM_H)-2);
+  const endIdx=Math.min(total-1,Math.ceil((scrollTop+viewH)/ITEM_H)+2);
+
+  const paddingTop=startIdx*ITEM_H;
+  const paddingBot=(total-1-endIdx)*ITEM_H;
+
+  let html=`<div style="height:${paddingTop}px"></div>`;
+  for(let vi=startIdx;vi<=endIdx;vi++){
+    const {sp,i}=_vsFiltered[vi];
+    html+=`<div class="sprite-item ${i===activeIdx?'active':''}" onclick="selectSprite(${i})" style="height:${ITEM_H}px">
+      <div class="sprite-num">#${i+1}</div>
+      <div class="sprite-data">
+        <div class="coords">x:<b>${sp.x}</b> y:<b>${sp.y}</b></div>
+        <div class="coords">w:<b>${sp.w}</b> h:<b>${sp.h}</b></div>
+      </div>
+      <button class="sprite-del" onclick="deleteSprite(event,${i})" title="Remove">✕</button>
+    </div>`;
+  }
+  html+=`<div style="height:${paddingBot}px"></div>`;
+
+  // Preserve scroll position across re-renders
+  const prevScroll=listEl.scrollTop;
+  listEl.innerHTML=html;
+  listEl.scrollTop=prevScroll;
+}
+
+// Wire up scroll event for virtual list
+document.getElementById('sprite-list').addEventListener('scroll',function(){
+  if(_vsFiltered.length>0) _vsRender(this);
+},{ passive:true });
+
+function selectSprite(idx){
+  activeIdx=idx; markOverlayDirty(); renderList(); drawOverlay();
+  const sp=sprites[idx], wrap=canvasWrap.getBoundingClientRect();
+  panX=wrap.width/2-(sp.x+sp.w/2)*zoomScale;
+  panY=wrap.height/2-(sp.y+sp.h/2)*zoomScale;
+  drawImage();
+}
+
+function deleteSprite(ev,idx){
+  ev.stopPropagation(); sprites.splice(idx,1);
+  if(activeIdx>=sprites.length) activeIdx=-1;
+  markOverlayDirty(); updateResultsPanel(); drawOverlay();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════════════════════════════════════
+async function exportSheet(){
+  if(!imgEl||sprites.length===0) return;
+  const removeBg=document.getElementById('remove-bg-toggle').checked;
+  const srcCanvas=document.createElement('canvas'); srcCanvas.width=imgW; srcCanvas.height=imgH;
+  const srcCtx=srcCanvas.getContext('2d'); srcCtx.drawImage(imgEl,0,0);
+  const srcData=srcCtx.getImageData(0,0,imgW,imgH).data;
+  const COLS=Math.ceil(Math.sqrt(sprites.length)), ROWS=Math.ceil(sprites.length/COLS), MARGIN=2;
+  let maxW=0,maxH=0;
+  sprites.forEach(sp=>{if(sp.w>maxW)maxW=sp.w;if(sp.h>maxH)maxH=sp.h;});
+  const outCanvas=document.createElement('canvas');
+  outCanvas.width=COLS*(maxW+MARGIN)+MARGIN; outCanvas.height=ROWS*(maxH+MARGIN)+MARGIN;
+  const outCtx=outCanvas.getContext('2d'); outCtx.clearRect(0,0,outCanvas.width,outCanvas.height);
+  sprites.forEach((sp,i)=>{
+    const col=i%COLS, row=Math.floor(i/COLS);
+    const dx=MARGIN+col*(maxW+MARGIN), dy=MARGIN+row*(maxH+MARGIN);
+    if(removeBg&&window._bgMask){
+      const tmpC=document.createElement('canvas'); tmpC.width=sp.w; tmpC.height=sp.h;
+      const tmpCtx=tmpC.getContext('2d'); const px=new Uint8ClampedArray(sp.w*sp.h*4);
+      for(let py=0;py<sp.h;py++) for(let px2=0;px2<sp.w;px2++){
+        const si=(sp.y+py)*imgW+(sp.x+px2), di=(py*sp.w+px2)*4;
+        const isBg=window._bgMask[si];
+        px[di]=srcData[si*4]; px[di+1]=srcData[si*4+1]; px[di+2]=srcData[si*4+2];
+        px[di+3]=isBg?0:srcData[si*4+3];
+      }
+      tmpCtx.putImageData(new ImageData(px,sp.w,sp.h),0,0); outCtx.drawImage(tmpC,dx,dy);
+    } else { outCtx.drawImage(srcCanvas,sp.x,sp.y,sp.w,sp.h,dx,dy,sp.w,sp.h); }
+  });
+  outCanvas.toBlob(blob=>triggerDownload(blob,'sprites_sheet.png'),'image/png');
+}
+
+function spritesToObjects(){ return sprites.map((sp,i)=>({id:i+1,x:sp.x,y:sp.y,width:sp.w,height:sp.h})); }
+function exportJSON(){ triggerDownload(new Blob([JSON.stringify(spritesToObjects(),null,2)],{type:'application/json'}),'sprites.json'); }
+function exportCSV(){ const r=[['id','x','y','width','height']]; sprites.forEach((sp,i)=>r.push([i+1,sp.x,sp.y,sp.w,sp.h])); triggerDownload(new Blob([r.map(x=>x.join(',')).join('\n')],{type:'text/csv'}),'sprites.csv'); }
+function copyAll(){ navigator.clipboard.writeText(JSON.stringify(spritesToObjects(),null,2)).then(()=>showToast('Copied!')); }
+function triggerDownload(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); showToast('Downloaded '+name); }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// RESET
+// ══════════════════════════════════════════════════════════════════════════════
+function resetAll(){
+  imgEl=null; sprites=[]; activeIdx=-1; retryAttempt=0; lastDetectParams=null;
+  window._bgMask=null; seamLinesH=[]; seamLinesV=[]; _ovOffscreen=null; markOverlayDirty();
+  imgCtx.clearRect(0,0,imgCanvas.width,imgCanvas.height);
+  ovCtx.clearRect(0,0,ovCanvas.width,ovCanvas.height);
+  dropZone.classList.remove('hidden');
+  ['detect-btn','reset-btn','retry-btn'].forEach(id=>document.getElementById(id).disabled=true);
+  document.getElementById('retry-info').style.display='none';
+  document.getElementById('retry-indicator').classList.remove('show');
+  ['stat-count','stat-size','stat-time'].forEach(id=>document.getElementById(id).textContent='—');
+  document.getElementById('file-input').value='';
+  updateResultsPanel();
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+window.dispatchEvent(new Event('resize'));
+</script>
 </body>
 </html>
